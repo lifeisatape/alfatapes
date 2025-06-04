@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>alfatapes</title>
+
+    <!-- iOS-специфичные meta теги -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="mobile-web-app-capable" content="yes">
+
+    <!-- Предотвращение зума на iOS -->
+    <meta name="msapplication-tap-highlight" content="no">
+    <meta name="apple-touch-fullscreen" content="yes">
+
+    <meta name="fc:frame" content='{
+      "version":"next",
+      "imageUrl":"https://alfatapes.space/image.png",
+      "button":{
+        "title":"🎨 Start Drawing",
+        "action":{
+          "type":"launch_frame",
+          "name":"alfatapes",
+          "url":"https://alfatapes.space/?miniApp=true",
+          "splashImageUrl":"https://alfatapes.space/splash.png",
+          "splashBackgroundColor":"#000000"
+        }
+      }
+    }' />
+
+    <title>alfatapes</title>
+
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/4.5.0/fabric.min.js"></script>
+    <script src="https://unpkg.com/react@17/umd/react.development.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@17/umd/react-dom.development.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js"></script>
+    <script src="UPNG.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gif.js/0.2.0/gif.worker.js"></script>
+
+    <script>
+
+        window.isMiniApp = false;
+        window.miniAppParams = new URLSearchParams(window.location.search);
+
+
+        if (window.miniAppParams.get('miniApp') === 'true' || 
+            window.parent !== window || 
+            window.location.search.includes('miniApp') ||
+            window.location.pathname.includes('/miniapp')) {
+            window.isMiniApp = true;
+            console.log('🚀 Running in Farcaster Mini App mode');
+        } else {
+            console.log('🌐 Running in regular web mode');
+        }
+    </script>
+
+    <script>
+        if (window.isMiniApp) {
+            console.log('📦 Loading Farcaster SDK...');
+            (function() {
+                const script = document.createElement('script');
+                script.type = 'module';
+                script.innerHTML = `
+                    try {
+                        const { sdk } = await import('https://esm.sh/@farcaster/frame-sdk');
+                        window.sdk = sdk;
+                        window.farcaster = sdk;
+                        console.log('✅ Farcaster SDK loaded successfully');
+                    } catch (error) {
+                        console.error('❌ Failed to load Farcaster SDK:', error);
+                    }
+                `;
+                document.head.appendChild(script);
+            })();
+        } else {
+            console.log('⏭️ Skipping Farcaster SDK loading (not in Mini App)');
+        }
+    </script>
+
+    <script>
+        var gifWorkerUrl = './gif.worker.js';
+    </script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" src="customBrushes.js"></script>
+    <script type="text/babel" src="Canvas.js"></script>
+    <script type="text/babel" src="RenderAreaSelector.js"></script>
+    <script type="text/babel" src="GifRenderSettings.js"></script>
+    <script type="text/babel" src="Toolbar.js"></script>
+    <script type="text/babel" src="LayersPanel.js"></script>
+    <script type="text/babel" src="App.js"></script>
+    <script type="text/babel">
+
+        function waitForComponents() {
+            if (typeof Canvas !== 'undefined' && 
+                typeof Toolbar !== 'undefined' && 
+                typeof LayersPanel !== 'undefined' && 
+                typeof RenderAreaSelector !== 'undefined' &&
+                typeof App !== 'undefined') {
+                console.log('All components loaded, rendering App');
+                ReactDOM.render(
+                    React.createElement(App),
+                    document.getElementById('root')
+                );
+            } else {
+                console.log('Waiting for components to load...');
+                setTimeout(waitForComponents, 50);
+            }
+        }
+        waitForComponents();
+    </script>
+</body>
+</html>
