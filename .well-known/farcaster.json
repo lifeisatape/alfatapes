@@ -1,0 +1,26 @@
+{
+  "accountAssociation": {
+    "header": "eyJmaWQiOjEwMjIyMTIsInR5cGUiOiJjdXN0b2R5Iiwia2V5IjoiMHhmZTA0NmFGMmQ1NEVEZjcwM2E2QTBjQTc3RDU2RGI0ZjE0N2QzRWQ3In0",
+    "payload": "eyJkb21haW4iOiJhbGZhdGFwZXMuc3BhY2UifQ",
+    "signature": "MHg4M2UwZTFhMDYzZjI4NzRkNDU0MDliYzIyY2RlN2E5YWZhOGJhMjJhNmFkNjhkNzYxZjQwNGRjNWU1OGFkZTM2NTZmMzUyZDgyNWJjOWZkMDlkZWEwMTIxZWJjN2VjNGEzYWIwZTczZmUwZWU2ZDY3M2ZmNmIxMDQ5YjZhOGM0MDFi"
+  },
+  "frame": {
+    "version": "next",
+    "name": "alfatapes",
+    "iconUrl": "https://alfatapes.space/icon.png",
+    "homeUrl": "https://alfatapes.space/?miniApp=true",
+    "imageUrl": "https://alfatapes.space/image.png",
+    "buttonTitle": "🎨 Start Drawing",
+    "splashImageUrl": "https://alfatapes.space/splash.png",
+    "splashBackgroundColor": "#000000",
+    "subtitle": "Creative Drawing and Animation",
+    "description": "Create stunning animated drawings with advanced brush tools, textures, and real-time effects. Perfect for artists and creative minds.",
+    "primaryCategory": "art-creativity",
+    "tags": ["drawing", "art", "creative", "animation"],
+    "heroImageUrl": "https://alfatapes.space/image.png",
+    "tagline": "Draw. Animate. Create.",
+    "ogTitle": "alfatapes - Creative Drawing",
+    "ogDescription": "Create stunning animated drawings with advanced brush tools, textures, and real-time effects",
+    "ogImageUrl": "https://alfatapes.space/image.png"
+  }
+}
