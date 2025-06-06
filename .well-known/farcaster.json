@@ -9,6 +9,7 @@
     "name": "alfatapes",
     "iconUrl": "https://alfatapes.space/icon.png",
     "homeUrl": "https://alfatapes.space/?miniApp=true",
+    "castShareUrl": "https://alfatapes.space/?miniApp=true&share=true",
     "imageUrl": "https://alfatapes.space/image.png",
     "buttonTitle": "🎨 Start Drawing",
     "splashImageUrl": "https://alfatapes.space/splash.png",
@@ -24,4 +25,3 @@
     "ogImageUrl": "https://alfatapes.space/image.png"
   }
 }
- 
