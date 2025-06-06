@@ -9,7 +9,6 @@
     "name": "alfatapes",
     "iconUrl": "https://alfatapes.space/icon.png",
     "homeUrl": "https://alfatapes.space/?miniApp=true",
-    "castShareUrl": "https://alfatapes.space/?miniApp=true&share=true",
     "imageUrl": "https://alfatapes.space/image.png",
     "buttonTitle": "🎨 Start Drawing",
     "splashImageUrl": "https://alfatapes.space/splash.png",
@@ -22,6 +21,7 @@
     "tagline": "Draw. Animate. Create.",
     "ogTitle": "alfatapes - Creative Drawing",
     "ogDescription": "Create stunning animated drawings with advanced brush tools, textures, and real-time effects",
-    "ogImageUrl": "https://alfatapes.space/image.png"
+    "ogImageUrl": "https://alfatapes.space/image.png",
+    "castShareUrl": "https://alfatapes.space/share=true",
   }
 }
