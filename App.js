@@ -100,6 +100,40 @@ const App = () => {
                             console.log('📍 Location:', location?.type);
                             console.log('🖥️ Client:', client?.clientFid);
 
+                            // Проверяем, есть ли shared cast с изображениями
+                            if (location?.type === 'cast_share' && location.cast) {
+                                console.log('🔗 Cast shared to app:', location.cast);
+                                
+                                // Ищем изображения в embeds
+                                const cast = location.cast;
+                                const imageUrls = cast.embeds?.filter(url => 
+                                    typeof url === 'string' && url.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+                                ) || [];
+
+                                console.log('🖼️ Found images in shared cast:', imageUrls);
+
+                                if (imageUrls.length > 0) {
+                                    // Ждем инициализации canvas перед загрузкой изображения
+                                    const waitForCanvas = () => {
+                                        return new Promise((resolve) => {
+                                            const checkCanvas = () => {
+                                                if (canvas) {
+                                                    resolve();
+                                                } else {
+                                                    setTimeout(checkCanvas, 100);
+                                                }
+                                            };
+                                            checkCanvas();
+                                        });
+                                    };
+
+                                    waitForCanvas().then(() => {
+                                        console.log('🎨 Loading first image from shared cast');
+                                        loadImageFromUrl(imageUrls[0]);
+                                    });
+                                }
+                            }
+
                         } catch (userError) {
                             console.log('ℹ️ User data not immediately available');
                         }
@@ -293,7 +327,7 @@ const App = () => {
             canvas.backgroundColor = 'transparent';
             canvas.renderAll();
             addToHistory();
-            
+
             // Хаптическая обратная связь для успешной очистки
             if (isFarcasterApp && farcasterSDK) {
                 try {
@@ -938,6 +972,89 @@ const App = () => {
     const handleFormatChange = (format) => {
         setPendingRenderFormat(format);
     };
+
+    // Функция загрузки изображения из URL (для shared кастов)
+    const loadImageFromUrl = React.useCallback(async (imageUrl) => {
+        if (!canvas || !imageUrl) {
+            console.log('❌ Canvas or image URL not available');
+            return;
+        }
+
+        console.log('🔄 Loading image from shared cast:', imageUrl);
+
+        try {
+            const img = new Image();
+            img.crossOrigin = 'anonymous'; // Для работы с CORS
+
+            return new Promise((resolve, reject) => {
+                img.onload = () => {
+                    console.log('✅ Image loaded successfully');
+
+                    const canvasWidth = canvas.width;
+                    const canvasHeight = canvas.height;
+
+                    // Для shared изображений делаем их больше - 60% от меньшей стороны canvas
+                    const maxDimension = Math.min(canvasWidth, canvasHeight) * 0.6;
+
+                    let newWidth, newHeight;
+                    if (img.width > img.height) {
+                        newWidth = Math.min(maxDimension, img.width);
+                        newHeight = (img.height / img.width) * newWidth;
+                    } else {
+                        newHeight = Math.min(maxDimension, img.height);
+                        newWidth = (img.width / img.height) * newHeight;
+                    }
+
+                    const fabricImage = new fabric.Image(img, {
+                        left: (canvasWidth - newWidth) / 2,
+                        top: (canvasHeight - newHeight) / 2,
+                        scaleX: newWidth / img.width,
+                        scaleY: newHeight / img.height,
+                        selectable: true,
+                        evented: true
+                    });
+
+                    // Добавляем метаданные для отслеживания
+                    fabricImage.sharedFromCast = true;
+                    fabricImage.originalUrl = imageUrl;
+
+                    canvas.add(fabricImage);
+                    canvas.setActiveObject(fabricImage);
+                    canvas.renderAll();
+
+                    // Добавляем в историю
+                    addToHistory();
+
+                    // Автоматически переключаемся в режим select для удобства редактирования
+                    setMode('select');
+
+                    console.log('🎨 Image from shared cast added to canvas');
+                    resolve();
+                };
+
+                img.onerror = (error) => {
+                    console.error('❌ Failed to load image from shared cast:', error);
+                    console.log('🔄 Trying to load via proxy...');
+
+                    // Пробуем загрузить через простой fetch для обхода CORS
+                    fetch(imageUrl)
+                        .then(response => response.blob())
+                        .then(blob => {
+                            const objectUrl = URL.createObjectURL(blob);
+                            img.src = objectUrl;
+                        })
+                        .catch(fetchError => {
+                            console.error('❌ Proxy load also failed:', fetchError);
+                            reject(fetchError);
+                        });
+                };
+
+                img.src = imageUrl;
+            });
+        } catch (error) {
+            console.error('❌ Error loading image from shared cast:', error);
+        }
+    }, [canvas, addToHistory, setMode]);
 
     return (
         <div id="editor">
