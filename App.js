@@ -32,9 +32,35 @@ const App = () => {
     const [isLayersPanelVisible, setIsLayersPanelVisible] = React.useState(false);
     const [isFarcasterApp, setIsFarcasterApp] = React.useState(false);
     const [farcasterSDK, setFarcasterSDK] = React.useState(null);
+    const [isSharedContext, setIsSharedContext] = React.useState(false);
+    const [sharedCastData, setSharedCastData] = React.useState(null);
 
     React.useEffect(() => {
         console.log('App component mounted');
+
+        // Проверяем URL параметры для shared кастов (доступны немедленно)
+        const urlParams = new URLSearchParams(window.location.search);
+        const castHash = urlParams.get('castHash');
+        const castFid = urlParams.get('castFid');
+        const viewerFid = urlParams.get('viewerFid');
+        const isShared = window.location.pathname === '/share' || urlParams.get('shared') === 'true';
+
+        if (isShared || castHash) {
+            console.log('🔗 Detected shared cast from URL parameters:', {
+                castHash,
+                castFid,
+                viewerFid,
+                isShared
+            });
+            
+            // Устанавливаем состояние для shared контекста
+            setIsSharedContext(true);
+            setSharedCastData({
+                castHash,
+                castFid,
+                viewerFid
+            });
+        }
 
         // Initialize Farcaster SDK if available
         const initFarcaster = async () => {
@@ -100,13 +126,31 @@ const App = () => {
                             console.log('📍 Location:', location?.type);
                             console.log('🖥️ Client:', client?.clientFid);
 
-                            // Проверяем, есть ли shared cast с изображениями
+                            // Проверяем, есть ли shared cast
                             if (location?.type === 'cast_share' && location.cast) {
                                 console.log('🔗 Cast shared to app:', location.cast);
                                 
-                                // Ищем изображения в embeds
                                 const cast = location.cast;
-                                const imageUrls = cast.embeds?.filter(url => 
+                                setIsSharedContext(true);
+                                setSharedCastData({
+                                    cast: cast,
+                                    author: cast.author,
+                                    hash: cast.hash,
+                                    timestamp: cast.timestamp,
+                                    embeds: cast.embeds || []
+                                });
+                                
+                                // Ищем изображения в embeds для автоматической загрузки
+                                const imageEmbeds = cast.embeds?.filter(embed => 
+                                    typeof embed === 'string' && 
+                                    (embed.includes('.jpg') || embed.includes('.png') || embed.includes('.gif'))
+                                );
+                                
+                                if (imageEmbeds && imageEmbeds.length > 0) {
+                                    console.log('🖼️ Found image embeds in shared cast:', imageEmbeds);
+                                    // Можно автоматически загрузить первое изображение
+                                    // loadImageFromUrl(imageEmbeds[0], canvas);
+                                }geUrls = cast.embeds?.filter(url => 
                                     typeof url === 'string' && url.match(/\.(jpg|jpeg|png|gif|webp)$/i)
                                 ) || [];
 
@@ -1034,19 +1078,39 @@ const App = () => {
 
                 img.onerror = (error) => {
                     console.error('❌ Failed to load image from shared cast:', error);
-                    console.log('🔄 Trying to load via proxy...');
+                    console.log('🔄 Trying alternative loading methods...');
 
-                    // Пробуем загрузить через простой fetch для обхода CORS
-                    fetch(imageUrl)
-                        .then(response => response.blob())
-                        .then(blob => {
-                            const objectUrl = URL.createObjectURL(blob);
-                            img.src = objectUrl;
-                        })
-                        .catch(fetchError => {
-                            console.error('❌ Proxy load also failed:', fetchError);
-                            reject(fetchError);
-                        });
+                    // Пробуем загрузить через fetch с различными методами обхода CORS
+                    const tryProxyLoad = async () => {
+                        const proxies = [
+                            '', // Прямая загрузка
+                            'https://cors-anywhere.herokuapp.com/', // CORS proxy
+                            'https://api.allorigins.win/raw?url=' // Alternative proxy
+                        ];
+
+                        for (const proxy of proxies) {
+                            try {
+                                const proxyUrl = proxy + encodeURIComponent(imageUrl);
+                                const response = await fetch(proxy ? proxyUrl : imageUrl, {
+                                    mode: proxy ? 'cors' : 'no-cors'
+                                });
+                                
+                                if (response.ok || proxy) {
+                                    const blob = await response.blob();
+                                    const objectUrl = URL.createObjectURL(blob);
+                                    img.src = objectUrl;
+                                    return;
+                                }
+                            } catch (proxyError) {
+                                console.log(`❌ Proxy ${proxy} failed:`, proxyError);
+                            }
+                        }
+                        
+                        console.error('❌ All loading methods failed');
+                        reject(new Error('Failed to load image with all methods'));
+                    };
+
+                    tryProxyLoad();
                 };
 
                 img.src = imageUrl;
@@ -1076,6 +1140,8 @@ const App = () => {
                 ungroupObjects={ungroupObjects}
                 farcasterSDK={farcasterSDK}
                 isFarcasterApp={isFarcasterApp}
+                isSharedContext={isSharedContext}
+                sharedCastData={sharedCastData}
             />
             <Toolbar
                 mode={mode}
