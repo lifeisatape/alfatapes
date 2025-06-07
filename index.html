@@ -67,10 +67,14 @@
                                  window.location.search.includes('miniApp') ||
                                  window.location.pathname.includes('/miniapp') ||
                                  window.location.pathname === '/share' ||
+                                 window.location.pathname.includes('/share') ||
                                  window.miniAppParams.has('castHash') ||
                                  window.miniAppParams.has('castFid') ||
+                                 window.miniAppParams.has('viewerFid') ||
                                  /replit\.dev/.test(window.location.hostname) ||
-                                 navigator.userAgent.includes('Farcaster');
+                                 navigator.userAgent.includes('Farcaster') ||
+                                 document.referrer.includes('farcaster') ||
+                                 window.location.href.includes('shared=true');
 
         if (isMiniAppContext) {
             window.isMiniApp = true;
