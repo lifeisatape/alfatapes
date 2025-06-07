@@ -61,20 +61,21 @@
         window.isMiniApp = false;
         window.miniAppParams = new URLSearchParams(window.location.search);
 
+        // Проверяем shared cast параметры
+        const isSharedCast = window.location.pathname === '/share' || 
+                            window.location.pathname.includes('/share') ||
+                            window.miniAppParams.has('castHash') ||
+                            window.miniAppParams.has('castFid') ||
+                            window.miniAppParams.has('viewerFid');
+
         // Улучшенная логика определения Mini App
         const isMiniAppContext = window.miniAppParams.get('miniApp') === 'true' || 
                                  window.parent !== window || 
                                  window.location.search.includes('miniApp') ||
-                                 window.location.pathname.includes('/miniapp') ||
-                                 window.location.pathname === '/share' ||
-                                 window.location.pathname.includes('/share') ||
-                                 window.miniAppParams.has('castHash') ||
-                                 window.miniAppParams.has('castFid') ||
-                                 window.miniAppParams.has('viewerFid') ||
+                                 isSharedCast ||
                                  /replit\.dev/.test(window.location.hostname) ||
                                  navigator.userAgent.includes('Farcaster') ||
-                                 document.referrer.includes('farcaster') ||
-                                 window.location.href.includes('shared=true');
+                                 document.referrer.includes('farcaster');
 
         if (isMiniAppContext) {
             window.isMiniApp = true;
@@ -91,24 +92,29 @@
         }
     </script>
 
-    <script>
+    <script type="module">
+        // Загружаем SDK всегда если мы в Mini App контексте
         if (window.isMiniApp) {
             console.log('📦 Loading Farcaster SDK...');
-            (function() {
-                const script = document.createElement('script');
-                script.type = 'module';
-                script.innerHTML = `
-                    try {
-                        const { sdk } = await import('https://esm.sh/@farcaster/frame-sdk');
-                        window.sdk = sdk;
-                        window.farcaster = sdk;
-                        console.log('✅ Farcaster SDK loaded successfully');
-                    } catch (error) {
-                        console.error('❌ Failed to load Farcaster SDK:', error);
-                    }
-                `;
-                document.head.appendChild(script);
-            })();
+            try {
+                const { sdk } = await import('https://esm.sh/@farcaster/frame-sdk');
+                window.sdk = sdk;
+                window.farcaster = sdk;
+                console.log('✅ Farcaster SDK loaded successfully');
+                
+                // Проверяем контекст сразу после загрузки SDK
+                try {
+                    const context = await sdk.context;
+                    console.log('📋 Farcaster context received:', context);
+                    
+                    // Сохраняем контекст для использования в App.js
+                    window.farcasterContext = context;
+                } catch (error) {
+                    console.log('⚠️ Could not get context immediately:', error);
+                }
+            } catch (error) {
+                console.error('❌ Failed to load Farcaster SDK:', error);
+            }
         } else {
             console.log('⏭️ Skipping Farcaster SDK loading (not in Mini App)');
         }
