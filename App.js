@@ -45,6 +45,16 @@ const App = () => {
         const viewerFid = urlParams.get('viewerFid');
         const isShared = window.location.pathname === '/share' || urlParams.get('shared') === 'true';
 
+        console.log('🔍 URL Analysis:', {
+            pathname: window.location.pathname,
+            search: window.location.search,
+            castHash,
+            castFid,
+            viewerFid,
+            isShared,
+            isMiniApp: window.isMiniApp
+        });
+
         if (isShared || castHash) {
             console.log('🔗 Detected shared cast from URL parameters:', {
                 castHash,
@@ -64,8 +74,23 @@ const App = () => {
 
         // Initialize Farcaster SDK if available
         const initFarcaster = async () => {
-            // Проверяем, работаем ли мы в Mini App
-            if (!window.isMiniApp) {
+            // Более продвинутая проверка Mini App окружения
+            const isInMiniAppContext = window.isMiniApp || 
+                                     window.location.pathname === '/share' ||
+                                     castHash || 
+                                     isShared ||
+                                     window.parent !== window;
+
+            console.log('🔍 Mini App context check:', {
+                windowIsMiniApp: window.isMiniApp,
+                isSharePath: window.location.pathname === '/share',
+                hasCastHash: !!castHash,
+                isShared,
+                inIframe: window.parent !== window,
+                finalDecision: isInMiniAppContext
+            });
+
+            if (!isInMiniAppContext) {
                 console.log('⏭️ Not in Mini App environment, skipping Farcaster initialization');
                 return;
             }
@@ -76,7 +101,7 @@ const App = () => {
                 // Ждем загрузки SDK с таймаутом
                 const waitForSDK = async () => {
                     let attempts = 0;
-                    const maxAttempts = 100; // 10 секунд
+                    const maxAttempts = 150; // 15 секунд
 
                     while (attempts < maxAttempts) {
                         if (window.sdk && window.sdk.actions && typeof window.sdk.actions.ready === 'function') {
@@ -89,19 +114,25 @@ const App = () => {
                 };
 
                 const sdk = await waitForSDK();
+                console.log('✅ SDK loaded, available methods:', Object.keys(sdk));
 
-                // Дополнительная проверка окружения
+                // Для shared кастов всегда считаем что мы в Mini App
                 let isInMiniAppEnv = true;
-                try {
-                    if (sdk.isInMiniApp) {
+                
+                // Только для non-shared проверяем SDK
+                if (!isShared && !castHash && sdk.isInMiniApp) {
+                    try {
                         isInMiniAppEnv = await sdk.isInMiniApp();
                         console.log('🔍 SDK environment check:', isInMiniAppEnv);
+                    } catch (error) {
+                        console.log('⚠️ Could not verify environment with SDK, assuming true for shared context:', error);
+                        isInMiniAppEnv = true;
                     }
-                } catch (error) {
-                    console.log('⚠️ Could not verify environment with SDK:', error);
+                } else {
+                    console.log('🔗 Shared context detected, skipping SDK environment check');
                 }
 
-                if (isInMiniAppEnv) {
+                if (isInMiniAppEnv || isShared || castHash) {
                     setFarcasterSDK(sdk);
                     setIsFarcasterApp(true);
                     console.log('✅ Farcaster SDK initialized successfully');
@@ -191,24 +222,37 @@ const App = () => {
                             requestAnimationFrame(() => {
                                 setTimeout(() => {
                                     resolve();
-                                }, 500); // Даем время на рендеринг
+                                }, 800); // Увеличиваем время ожидания
                             });
                         });
                     };
 
                     await waitForUIReady();
 
-                    // Скрываем splash screen
-                    try {
-                        await sdk.actions.ready({
-                            disableNativeGestures: false // Разрешаем нативные жесты
-                        });
-                        console.log('🎉 Farcaster splash screen dismissed');
-                    } catch (error) {
-                        console.error('❌ Failed to dismiss splash screen:', error);
-                    }
+                    // Скрываем splash screen - несколько попыток
+                    const dismissSplash = async () => {
+                        const maxAttempts = 3;
+                        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+                            try {
+                                console.log(`🎬 Attempting to dismiss splash screen (attempt ${attempt}/${maxAttempts})`);
+                                await sdk.actions.ready({
+                                    disableNativeGestures: false
+                                });
+                                console.log('🎉 Farcaster splash screen dismissed successfully');
+                                return;
+                            } catch (error) {
+                                console.error(`❌ Attempt ${attempt} failed:`, error);
+                                if (attempt < maxAttempts) {
+                                    await new Promise(resolve => setTimeout(resolve, 1000));
+                                }
+                            }
+                        }
+                        console.error('❌ All attempts to dismiss splash screen failed');
+                    };
+
+                    await dismissSplash();
                 } else {
-                    console.log('⚠️ SDK reports not in Mini App environment');
+                    console.log('⚠️ Not proceeding with SDK initialization');
                 }
             } catch (error) {
                 console.error('❌ Error initializing Farcaster SDK:', error);
