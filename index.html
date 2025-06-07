@@ -4,17 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>alfatapes</title>
-
-    <!-- iOS-специфичные meta теги -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="format-detection" content="telephone=no">
     <meta name="mobile-web-app-capable" content="yes">
-
-    <!-- Предотвращение зума на iOS -->
     <meta name="msapplication-tap-highlight" content="no">
     <meta name="apple-touch-fullscreen" content="yes">
-
     <meta name="fc:frame" content='{
       "version":"next",
       "imageUrl":"https://alfatapes.space/image.png",
@@ -29,6 +24,23 @@
         }
       }
     }' />
+
+    <script>
+        // Используем текущий домен в браузере
+        window.PUBLIC_URL = window.location.origin;
+        
+        // Обновляем frame meta tag с правильным URL
+        document.addEventListener('DOMContentLoaded', function() {
+            const frameMetaTag = document.querySelector('meta[name="fc:frame"]');
+            if (frameMetaTag) {
+                const frameContent = JSON.parse(frameMetaTag.getAttribute('content'));
+                frameContent.imageUrl = `${window.PUBLIC_URL}/image.png`;
+                frameContent.button.action.url = `${window.PUBLIC_URL}/?miniApp=true`;
+                frameContent.button.action.splashImageUrl = `${window.PUBLIC_URL}/splash.png`;
+                frameMetaTag.setAttribute('content', JSON.stringify(frameContent));
+            }
+        });
+    </script>
 
     <title>alfatapes</title>
 
@@ -49,13 +61,27 @@
         window.isMiniApp = false;
         window.miniAppParams = new URLSearchParams(window.location.search);
 
+        // Улучшенная логика определения Mini App
+        const isMiniAppContext = window.miniAppParams.get('miniApp') === 'true' || 
+                                 window.parent !== window || 
+                                 window.location.search.includes('miniApp') ||
+                                 window.location.pathname.includes('/miniapp') ||
+                                 window.location.pathname === '/share' ||
+                                 window.miniAppParams.has('castHash') ||
+                                 window.miniAppParams.has('castFid') ||
+                                 /replit\.dev/.test(window.location.hostname) ||
+                                 navigator.userAgent.includes('Farcaster');
 
-        if (window.miniAppParams.get('miniApp') === 'true' || 
-            window.parent !== window || 
-            window.location.search.includes('miniApp') ||
-            window.location.pathname.includes('/miniapp')) {
+        if (isMiniAppContext) {
             window.isMiniApp = true;
             console.log('🚀 Running in Farcaster Mini App mode');
+            console.log('🔍 Detection reasons:', {
+                miniAppParam: window.miniAppParams.get('miniApp') === 'true',
+                inIframe: window.parent !== window,
+                hasSharePath: window.location.pathname === '/share',
+                hasCastParams: window.miniAppParams.has('castHash'),
+                isReplit: /replit\.dev/.test(window.location.hostname)
+            });
         } else {
             console.log('🌐 Running in regular web mode');
         }
@@ -119,4 +145,4 @@
         waitForComponents();
     </script>
 </body>
-</html> 
+</html>
