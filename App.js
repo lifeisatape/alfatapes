@@ -43,7 +43,10 @@ const App = () => {
         const castHash = urlParams.get('castHash');
         const castFid = urlParams.get('castFid');
         const viewerFid = urlParams.get('viewerFid');
-        const isShared = window.location.pathname === '/share' || urlParams.get('shared') === 'true';
+        const isShared = window.location.pathname === '/share' || 
+                         window.location.pathname.includes('/share') ||
+                         urlParams.get('shared') === 'true' ||
+                         castHash || castFid;
 
         console.log('🔍 URL Analysis:', {
             pathname: window.location.pathname,
@@ -52,11 +55,12 @@ const App = () => {
             castFid,
             viewerFid,
             isShared,
-            isMiniApp: window.isMiniApp
+            isMiniApp: window.isMiniApp,
+            fullUrl: window.location.href
         });
 
-        if (isShared || castHash) {
-            console.log('🔗 Detected shared cast from URL parameters:', {
+        if (isShared) {
+            console.log('🔗 Detected shared cast context:', {
                 castHash,
                 castFid,
                 viewerFid,
@@ -70,6 +74,10 @@ const App = () => {
                 castFid,
                 viewerFid
             });
+
+            // Для shared кастов принудительно включаем Mini App режим
+            window.isMiniApp = true;
+            setIsFarcasterApp(true);
         }
 
         // Initialize Farcaster SDK if available
@@ -77,13 +85,14 @@ const App = () => {
             // Более продвинутая проверка Mini App окружения
             const isInMiniAppContext = window.isMiniApp || 
                                      window.location.pathname === '/share' ||
+                                     window.location.pathname.includes('/share') ||
                                      castHash || 
                                      isShared ||
                                      window.parent !== window;
 
             console.log('🔍 Mini App context check:', {
                 windowIsMiniApp: window.isMiniApp,
-                isSharePath: window.location.pathname === '/share',
+                isSharePath: window.location.pathname.includes('/share'),
                 hasCastHash: !!castHash,
                 isShared,
                 inIframe: window.parent !== window,
@@ -98,19 +107,26 @@ const App = () => {
             try {
                 console.log('🔄 Initializing Farcaster integration...');
 
-                // Ждем загрузки SDK с таймаутом
+                // Ждем загрузки SDK с увеличенным таймаутом для shared кастов
                 const waitForSDK = async () => {
                     let attempts = 0;
-                    const maxAttempts = 150; // 15 секунд
+                    const maxAttempts = isShared ? 300 : 150; // 30 секунд для shared, 15 для обычных
+
+                    console.log(`⏰ Waiting for SDK (max ${maxAttempts/10}s)...`);
 
                     while (attempts < maxAttempts) {
                         if (window.sdk && window.sdk.actions && typeof window.sdk.actions.ready === 'function') {
+                            console.log(`✅ SDK loaded after ${attempts/10}s`);
                             return window.sdk;
                         }
                         await new Promise(resolve => setTimeout(resolve, 100));
                         attempts++;
+                        
+                        if (attempts % 50 === 0) {
+                            console.log(`⏳ Still waiting for SDK... ${attempts/10}s elapsed`);
+                        }
                     }
-                    throw new Error('SDK not loaded within timeout');
+                    throw new Error(`SDK not loaded within timeout (${maxAttempts/10}s)`);
                 };
 
                 const sdk = await waitForSDK();
@@ -229,12 +245,14 @@ const App = () => {
 
                     await waitForUIReady();
 
-                    // Скрываем splash screen - несколько попыток
+                    // Скрываем splash screen - больше попыток для shared кастов
                     const dismissSplash = async () => {
-                        const maxAttempts = 3;
+                        const maxAttempts = isShared ? 5 : 3;
+                        const delayBetweenAttempts = isShared ? 1500 : 1000;
+                        
                         for (let attempt = 1; attempt <= maxAttempts; attempt++) {
                             try {
-                                console.log(`🎬 Attempting to dismiss splash screen (attempt ${attempt}/${maxAttempts})`);
+                                console.log(`🎬 Attempting to dismiss splash screen (attempt ${attempt}/${maxAttempts}) - shared: ${isShared}`);
                                 await sdk.actions.ready({
                                     disableNativeGestures: false
                                 });
@@ -243,11 +261,17 @@ const App = () => {
                             } catch (error) {
                                 console.error(`❌ Attempt ${attempt} failed:`, error);
                                 if (attempt < maxAttempts) {
-                                    await new Promise(resolve => setTimeout(resolve, 1000));
+                                    console.log(`⏳ Waiting ${delayBetweenAttempts}ms before retry...`);
+                                    await new Promise(resolve => setTimeout(resolve, delayBetweenAttempts));
                                 }
                             }
                         }
-                        console.error('❌ All attempts to dismiss splash screen failed');
+                        console.error('❌ All attempts to dismiss splash screen failed, continuing anyway...');
+                        
+                        // Для shared кастов продолжаем работу даже если splash не удалось закрыть
+                        if (isShared) {
+                            console.log('🔄 Shared cast context - continuing despite splash dismissal failure');
+                        }
                     };
 
                     await dismissSplash();
