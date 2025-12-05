@@ -5,7 +5,7 @@ const LayersPanel = ({ canvas, isVisible, onClose }) => {
     const [selectedLayers, setSelectedLayers] = React.useState([]);
     const [expandedGroups, setExpandedGroups] = React.useState(new Set());
 
-    // Функция для создания иерархической структуры слоев
+    // Функция для создания структуры слоев
     const buildLayerHierarchy = (objects) => {
         const layerData = [];
 
