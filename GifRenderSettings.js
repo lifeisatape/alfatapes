@@ -1,4 +1,3 @@
-
 console.log('Loading GifRenderSettings component...');
 
 const GifRenderSettings = ({ 
