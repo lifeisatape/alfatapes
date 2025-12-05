@@ -7,23 +7,23 @@
   "frame": {
     "version": "next",
     "name": "alfatapes",
-    "appUrl": "https://alfatapes.space",
-    "iconUrl": "https://alfatapes.space/icon.png",
-    "homeUrl": "https://alfatapes.space/?miniApp=true",
-    "imageUrl": "https://alfatapes.space/image.png",
+    "appUrl": "https://tapes.moscow",
+    "iconUrl": "https://tapes.moscow/icon.png",
+    "homeUrl": "https://tapes.moscow/?miniApp=true",
+    "imageUrl": "https://tapes.moscow/image.png",
     "buttonTitle": "🎨 Start Drawing",
-    "splashImageUrl": "https://alfatapes.space/splash.png",
+    "splashImageUrl": "https://tapes.moscow/splash.png",
     "splashBackgroundColor": "#000000",
     "subtitle": "Creative Drawing and Animation",
     "description": "Create stunning animated drawings with advanced brush tools, textures, and real-time effects. Perfect for artists and creative minds.",
     "primaryCategory": "art-creativity",
     "tags": ["drawing", "art", "creative", "animation"],
-    "heroImageUrl": "https://alfatapes.space/image.png",
+    "heroImageUrl": "https://tapes.moscow/image.png",
     "tagline": "Draw. Animate. Create.",
     "ogTitle": "alfatapes - Creative Drawing",
     "ogDescription": "Create stunning animated drawings with advanced brush tools, textures, and real-time effects",
-    "ogImageUrl": "https://alfatapes.space/image.png",
-    "icon": "https://alfatapes.space/icon.png",
-    "castShareUrl": "https://alfatapes.space/share"
+    "ogImageUrl": "https://tapes.moscow/image.png",
+    "icon": "https://tapes.moscow/icon.png",
+    "castShareUrl": "https://tapes.moscow/share"
   }
 }
