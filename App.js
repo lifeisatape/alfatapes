@@ -32,56 +32,13 @@ const App = () => {
     const [isLayersPanelVisible, setIsLayersPanelVisible] = React.useState(false);
     const [isFarcasterApp, setIsFarcasterApp] = React.useState(false);
     const [farcasterSDK, setFarcasterSDK] = React.useState(null);
-    const [isSharedContext, setIsSharedContext] = React.useState(false);
-    const [sharedCastData, setSharedCastData] = React.useState(null);
 
     React.useEffect(() => {
         console.log('App component mounted');
 
-        // Проверяем URL параметры для shared кастов (доступны немедленно)
-        const urlParams = new URLSearchParams(window.location.search);
-        const castHash = urlParams.get('castHash');
-        const castFid = urlParams.get('castFid');
-        const viewerFid = urlParams.get('viewerFid');
-        const isShared = window.location.pathname === '/share' || 
-                         window.location.pathname.includes('/share') ||
-                         urlParams.get('shared') === 'true' ||
-                         castHash || castFid;
-
-        console.log('🔍 URL Analysis:', {
-            pathname: window.location.pathname,
-            search: window.location.search,
-            castHash,
-            castFid,
-            viewerFid,
-            isShared,
-            isMiniApp: window.isMiniApp,
-            fullUrl: window.location.href
-        });
-
-        if (isShared) {
-            console.log('🔗 Detected shared cast context:', {
-                castHash,
-                castFid,
-                viewerFid,
-                isShared
-            });
-            
-            // Устанавливаем состояние для shared контекста
-            setIsSharedContext(true);
-            setSharedCastData({
-                castHash,
-                castFid,
-                viewerFid
-            });
-
-            // Для shared кастов принудительно включаем Mini App режим
-            window.isMiniApp = true;
-            setIsFarcasterApp(true);
-        }
-
         // Initialize Farcaster SDK if available
         const initFarcaster = async () => {
+            // Проверяем, работаем ли мы в Mini App
             if (!window.isMiniApp) {
                 console.log('⏭️ Not in Mini App environment, skipping Farcaster initialization');
                 return;
@@ -90,113 +47,91 @@ const App = () => {
             try {
                 console.log('🔄 Initializing Farcaster integration...');
 
-                // Ждем загрузки SDK
+                // Ждем загрузки SDK с таймаутом
                 const waitForSDK = async () => {
                     let attempts = 0;
-                    const maxAttempts = 200; // 20 секунд
-
-                    console.log(`⏰ Waiting for SDK (max ${maxAttempts/10}s)...`);
+                    const maxAttempts = 100; // 10 секунд
 
                     while (attempts < maxAttempts) {
                         if (window.sdk && window.sdk.actions && typeof window.sdk.actions.ready === 'function') {
-                            console.log(`✅ SDK loaded after ${attempts/10}s`);
                             return window.sdk;
                         }
                         await new Promise(resolve => setTimeout(resolve, 100));
                         attempts++;
-                        
-                        if (attempts % 50 === 0) {
-                            console.log(`⏳ Still waiting for SDK... ${attempts/10}s elapsed`);
-                        }
                     }
-                    throw new Error(`SDK not loaded within timeout (${maxAttempts/10}s)`);
+                    throw new Error('SDK not loaded within timeout');
                 };
 
                 const sdk = await waitForSDK();
-                console.log('✅ SDK loaded, available methods:', Object.keys(sdk));
 
-                setFarcasterSDK(sdk);
-                setIsFarcasterApp(true);
+                // Дополнительная проверка окружения
+                let isInMiniAppEnv = true;
+                try {
+                    if (sdk.isInMiniApp) {
+                        isInMiniAppEnv = await sdk.isInMiniApp();
+                        console.log('🔍 SDK environment check:', isInMiniAppEnv);
+                    }
+                } catch (error) {
+                    console.log('⚠️ Could not verify environment with SDK:', error);
+                }
 
-                // Используем сохраненный контекст если доступен
-                let context = window.farcasterContext;
-                if (!context) {
+                if (isInMiniAppEnv) {
+                    setFarcasterSDK(sdk);
+                    setIsFarcasterApp(true);
+                    console.log('✅ Farcaster SDK initialized successfully');
+
+                    // Получаем контекст приложения
                     try {
-                        context = await sdk.context;
-                        console.log('📋 Farcaster context received from SDK');
+                        const context = await sdk.context;
+                        console.log('📋 Farcaster context received');
+
+                        // Безопасное получение данных пользователя
+                        try {
+                            const user = context.user;
+                            const location = context.location;
+                            const client = context.client;
+
+                            console.log('👤 User info:', {
+                                fid: user?.fid,
+                                username: user?.username,
+                                displayName: user?.displayName
+                            });
+
+                            console.log('📍 Location:', location?.type);
+                            console.log('🖥️ Client:', client?.clientFid);
+
+                        } catch (userError) {
+                            console.log('ℹ️ User data not immediately available');
+                        }
                     } catch (error) {
                         console.log('⚠️ Could not get context:', error.message);
                     }
-                }
 
-                if (context) {
-                    const user = context.user;
-                    const location = context.location;
-
-                    console.log('👤 User info:', {
-                        fid: user?.fid,
-                        username: user?.username,
-                        displayName: user?.displayName
-                    });
-
-                    console.log('📍 Location:', location?.type);
-
-                    // Проверяем, есть ли shared cast
-                    if (location?.type === 'cast_share' && location.cast) {
-                        console.log('🔗 Cast shared to app:', location.cast);
-                        
-                        const cast = location.cast;
-                        setIsSharedContext(true);
-                        setSharedCastData({
-                            cast: cast,
-                            author: cast.author,
-                            hash: cast.hash,
-                            timestamp: cast.timestamp,
-                            embeds: cast.embeds || []
-                        });
-                        
-                        // Ищем изображения в embeds
-                        const imageUrls = cast.embeds?.filter(url => 
-                            typeof url === 'string' && url.match(/\.(jpg|jpeg|png|gif|webp)$/i)
-                        ) || [];
-
-                        console.log('🖼️ Found images in shared cast:', imageUrls);
-
-                        if (imageUrls.length > 0) {
-                            // Ждем инициализации canvas перед загрузкой изображения
-                            const waitForCanvas = () => {
-                                return new Promise((resolve) => {
-                                    const checkCanvas = () => {
-                                        if (canvas) {
-                                            resolve();
-                                        } else {
-                                            setTimeout(checkCanvas, 100);
-                                        }
-                                    };
-                                    checkCanvas();
-                                });
-                            };
-
-                            waitForCanvas().then(() => {
-                                console.log('🎨 Loading first image from shared cast');
-                                loadImageFromUrl(imageUrls[0]);
+                    // Ждем готовности UI перед вызовом ready()
+                    const waitForUIReady = () => {
+                        return new Promise((resolve) => {
+                            requestAnimationFrame(() => {
+                                setTimeout(() => {
+                                    resolve();
+                                }, 500); // Даем время на рендеринг
                             });
-                        }
+                        });
+                    };
+
+                    await waitForUIReady();
+
+                    // Скрываем splash screen
+                    try {
+                        await sdk.actions.ready({
+                            disableNativeGestures: false // Разрешаем нативные жесты
+                        });
+                        console.log('🎉 Farcaster splash screen dismissed');
+                    } catch (error) {
+                        console.error('❌ Failed to dismiss splash screen:', error);
                     }
+                } else {
+                    console.log('⚠️ SDK reports not in Mini App environment');
                 }
-
-                // Ждем готовности UI перед вызовом ready()
-                await new Promise(resolve => setTimeout(resolve, 1000));
-
-                // Скрываем splash screen
-                try {
-                    console.log('🎬 Dismissing splash screen...');
-                    await sdk.actions.ready();
-                    console.log('🎉 Farcaster splash screen dismissed successfully');
-                } catch (error) {
-                    console.error('❌ Failed to dismiss splash screen:', error);
-                }
-
             } catch (error) {
                 console.error('❌ Error initializing Farcaster SDK:', error);
                 // Приложение должно работать и без Farcaster
@@ -358,7 +293,7 @@ const App = () => {
             canvas.backgroundColor = 'transparent';
             canvas.renderAll();
             addToHistory();
-
+            
             // Хаптическая обратная связь для успешной очистки
             if (isFarcasterApp && farcasterSDK) {
                 try {
@@ -1004,114 +939,12 @@ const App = () => {
         setPendingRenderFormat(format);
     };
 
-    // Функция загрузки изображения из URL (для shared кастов)
-    const loadImageFromUrl = React.useCallback(async (imageUrl) => {
-        if (!canvas || !imageUrl) {
-            console.log('❌ Canvas or image URL not available');
-            return;
-        }
-
-        console.log('🔄 Loading image from shared cast:', imageUrl);
-
-        try {
-            const img = new Image();
-            img.crossOrigin = 'anonymous'; // Для работы с CORS
-
-            return new Promise((resolve, reject) => {
-                img.onload = () => {
-                    console.log('✅ Image loaded successfully');
-
-                    const canvasWidth = canvas.width;
-                    const canvasHeight = canvas.height;
-
-                    // Для shared изображений делаем их больше - 60% от меньшей стороны canvas
-                    const maxDimension = Math.min(canvasWidth, canvasHeight) * 0.6;
-
-                    let newWidth, newHeight;
-                    if (img.width > img.height) {
-                        newWidth = Math.min(maxDimension, img.width);
-                        newHeight = (img.height / img.width) * newWidth;
-                    } else {
-                        newHeight = Math.min(maxDimension, img.height);
-                        newWidth = (img.width / img.height) * newHeight;
-                    }
-
-                    const fabricImage = new fabric.Image(img, {
-                        left: (canvasWidth - newWidth) / 2,
-                        top: (canvasHeight - newHeight) / 2,
-                        scaleX: newWidth / img.width,
-                        scaleY: newHeight / img.height,
-                        selectable: true,
-                        evented: true
-                    });
-
-                    // Добавляем метаданные для отслеживания
-                    fabricImage.sharedFromCast = true;
-                    fabricImage.originalUrl = imageUrl;
-
-                    canvas.add(fabricImage);
-                    canvas.setActiveObject(fabricImage);
-                    canvas.renderAll();
-
-                    // Добавляем в историю
-                    addToHistory();
-
-                    // Автоматически переключаемся в режим select для удобства редактирования
-                    setMode('select');
-
-                    console.log('🎨 Image from shared cast added to canvas');
-                    resolve();
-                };
-
-                img.onerror = (error) => {
-                    console.error('❌ Failed to load image from shared cast:', error);
-                    console.log('🔄 Trying alternative loading methods...');
-
-                    // Пробуем загрузить через fetch с различными методами обхода CORS
-                    const tryProxyLoad = async () => {
-                        const proxies = [
-                            '', // Прямая загрузка
-                            'https://cors-anywhere.herokuapp.com/', // CORS proxy
-                            'https://api.allorigins.win/raw?url=' // Alternative proxy
-                        ];
-
-                        for (const proxy of proxies) {
-                            try {
-                                const proxyUrl = proxy + encodeURIComponent(imageUrl);
-                                const response = await fetch(proxy ? proxyUrl : imageUrl, {
-                                    mode: proxy ? 'cors' : 'no-cors'
-                                });
-                                
-                                if (response.ok || proxy) {
-                                    const blob = await response.blob();
-                                    const objectUrl = URL.createObjectURL(blob);
-                                    img.src = objectUrl;
-                                    return;
-                                }
-                            } catch (proxyError) {
-                                console.log(`❌ Proxy ${proxy} failed:`, proxyError);
-                            }
-                        }
-                        
-                        console.error('❌ All loading methods failed');
-                        reject(new Error('Failed to load image with all methods'));
-                    };
-
-                    tryProxyLoad();
-                };
-
-                img.src = imageUrl;
-            });
-        } catch (error) {
-            console.error('❌ Error loading image from shared cast:', error);
-        }
-    }, [canvas, addToHistory, setMode]);
-
     return (
         <div id="editor">
             <Canvas
                 setCanvas={setCanvas}
                 mode={mode}
+                setMode={setMode}
                 color={color}
                 brushSize={brushSize}
                 opacity={opacity}
@@ -1127,8 +960,6 @@ const App = () => {
                 ungroupObjects={ungroupObjects}
                 farcasterSDK={farcasterSDK}
                 isFarcasterApp={isFarcasterApp}
-                isSharedContext={isSharedContext}
-                sharedCastData={sharedCastData}
             />
             <Toolbar
                 mode={mode}
