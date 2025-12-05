@@ -33,7 +33,7 @@ fabric.CrayonBrush = fabric.util.createClass(fabric.BaseBrush, {
         console.log('Updating pattern canvas');
         const patternCtx = this.patternCanvas.getContext('2d');
         patternCtx.clearRect(0, 0, this.patternCanvas.width, this.patternCanvas.height);
-        
+
         // Сбрасываем все параметры контекста для iOS совместимости
         patternCtx.globalAlpha = 1;
         patternCtx.globalCompositeOperation = 'source-over';
@@ -49,7 +49,7 @@ fabric.CrayonBrush = fabric.util.createClass(fabric.BaseBrush, {
                 patternCtx.fillRect(i, j, this.grainSize, this.grainSize);
             }
         }
-        
+
         // Сбрасываем альфу обратно
         patternCtx.globalAlpha = 1;
     },
@@ -71,7 +71,7 @@ fabric.CrayonBrush = fabric.util.createClass(fabric.BaseBrush, {
     onMouseMove: function(pointer) {
         console.log('Mouse move on CrayonBrush');
         this._points.push(pointer);
-        
+
         this.minX = Math.min(this.minX, pointer.x - this.width);
         this.maxX = Math.max(this.maxX, pointer.x + this.width);
         this.minY = Math.min(this.minY, pointer.y - this.width);
@@ -200,20 +200,45 @@ fabric.CrayonBrush = fabric.util.createClass(fabric.BaseBrush, {
 
         if (!this.currentStroke) return;
         const trimmed = this.trimCanvas(this.currentStroke.canvas);
+        const finalLeft = this.currentStroke.offsetX + trimmed.offsetX;
+        const finalTop = this.currentStroke.offsetY + trimmed.offsetY;
+        
         const image = new fabric.Image(trimmed.canvas, {
-            left: this.currentStroke.offsetX + trimmed.offsetX,
-            top: this.currentStroke.offsetY + trimmed.offsetY,
-            objectCaching: false,
-            animated: this.animated,
-            animationTime: 0,
-            animationSettings: this.animationSettings || {
-                pulseScale: 0,
+            left: finalLeft,
+            top: finalTop,
+            scaleX: 1,
+            scaleY: 1,
+            angle: 0,
+            opacity: 1.0,
+            selectable: true,
+            evented: true,
+            animated: this.animated || false,
+            animationTime: this.animated ? Math.random() * 100 : 0,
+            baseScaleX: 1,
+            baseScaleY: 1,
+            originalLeft: finalLeft,
+            originalTop: finalTop,
+            animationSettings: this.animated ? {...(this.animationSettings || {
+                pulseScale: 0.1,
                 rotationSpeed: 0,
                 opacityRange: 0,
                 moveAmplitude: 0.2,
                 skewAmount: 2
+            })} : {
+                pulseScale: 0,
+                rotationSpeed: 0,
+                opacityRange: 0,
+                moveAmplitude: 0,
+                skewAmount: 0
             }
         });
+        
+        // Принудительно устанавливаем базовые значения после создания
+        image.baseScaleX = 1;
+        image.baseScaleY = 1;
+
+        console.log('Created image with animated:', image.animated, 'pulseScale:', image.animationSettings?.pulseScale);
+        console.log('Brush animationSettings at creation:', this.animationSettings);
 
         this.canvas.add(image);
         this.canvas.clearContext(this.canvas.contextTop);
