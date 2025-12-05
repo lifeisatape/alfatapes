@@ -389,7 +389,6 @@ const RenderAreaSelector = ({ canvas, isVisible, onClose, onRender, format, onFo
             document.addEventListener('mousemove', handleMouseMove);
             document.addEventListener('mouseup', handleMouseUp);
             
-            // Touch events for mobile
             document.addEventListener('touchmove', handleTouchMove, { passive: false });
             document.addEventListener('touchend', handleTouchEnd);
 
