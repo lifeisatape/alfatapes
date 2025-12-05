@@ -1,8 +1,8 @@
 console.log('Loading Toolbar component...');
 
-const Toolbar = ({ 
-    mode, setMode, color, setColor, brushSize, setBrushSize, 
-    opacity, setOpacity, textureScale, setTextureScale, 
+const Toolbar = ({
+    mode, setMode, color, setColor, brushSize, setBrushSize,
+    opacity, setOpacity, textureScale, setTextureScale,
     strokeVariation, setStrokeVariation, pressureVariation, setPressureVariation,
     graininess, setGraininess, strokeCount, setStrokeCount,
     grainSize, setGrainSize, addImage, undo, redo, clearCanvas, saveCanvas,
@@ -12,15 +12,16 @@ const Toolbar = ({
 }) => {
     const [showBrushMenu, setShowBrushMenu] = React.useState(false);
     const [previewAnimationFrame, setPreviewAnimationFrame] = React.useState(null);
-    
+
     const [isDarkTheme, setIsDarkTheme] = React.useState(true);
     const [isAnimated, setIsAnimated] = React.useState(true);
     const [isInFavorites, setIsInFavorites] = React.useState(false);
     const [animationSettings, setAnimationSettings] = React.useState({
-        pulseScale: 0,
+        pulseScale: 0.15,
         rotationSpeed: 0,
         moveAmplitude: 0.2,
         skewAmount: 2,
+        opacityRange: 0,
         enablePulse: true,
         enableRotation: true,
         enableOpacity: true,
@@ -36,7 +37,7 @@ const Toolbar = ({
     const isMobile = React.useMemo(() => {
         return window.innerWidth <= 768 || /iPhone|iPad|iPod|Android|webOS|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     }, []);
-    
+
     const isIOS = React.useMemo(() => {
         return /iPhone|iPad|iPod/i.test(navigator.userAgent);
     }, []);
@@ -126,7 +127,7 @@ const Toolbar = ({
 
     const handleAddImage = React.useCallback(() => {
         console.log('Adding image, iOS:', isIOS);
-        
+
         // Хаптическая обратная связь при нажатии
         triggerHaptic('selection');
 
@@ -227,8 +228,17 @@ const Toolbar = ({
 
     // Обновляем превью при открытии меню
     React.useEffect(() => {
+        let animationId = null;
+        let previewCanvas = null;
+        
         if (showBrushMenu && brushPreviewRef.current) {
-            const previewCanvas = new fabric.Canvas(brushPreviewRef.current);
+            // Отменяем предыдущую анимацию ПЕРЕД созданием новой
+            if (previewAnimationFrame) {
+                cancelAnimationFrame(previewAnimationFrame);
+                setPreviewAnimationFrame(null);
+            }
+
+            previewCanvas = new fabric.Canvas(brushPreviewRef.current);
             previewCanvas.setDimensions({ width: 200, height: 200 });
             previewCanvas.backgroundColor = 'transparent';
 
@@ -257,53 +267,61 @@ const Toolbar = ({
             brush.onMouseMove(endPoint);
             brush.onMouseUp();
 
-            // Анимация для превью
-            const animate = () => {
-                const objects = previewCanvas.getObjects();
-                objects.forEach(obj => {
-                    if (obj.animated) {
-                        obj.animationTime = (obj.animationTime || 0) + 0.5;
-                        const settings = obj.animationSettings;
-
-                        const pulseScale = 1 + Math.sin(obj.animationTime * 0.8) * settings.pulseScale;
-                        obj.scaleX = pulseScale;
-                        obj.scaleY = pulseScale;
-
-                        obj.angle += Math.sin(obj.animationTime * settings.rotationSpeed) * 2;
-
-                        obj.opacity = settings.opacityRange > 0 ? 
-                            1 + Math.sin(obj.animationTime * 0.4) * settings.opacityRange :
-                            1;
-
-                        obj.left += Math.sin(obj.animationTime * 0.3) * settings.moveAmplitude;
-                        obj.top += Math.cos(obj.animationTime * 0.2) * settings.moveAmplitude;
-
-                        obj.skewX = Math.sin(obj.animationTime * 0.25) * (settings.skewAmount || 5);
-                        obj.skewY = Math.cos(obj.animationTime * 0.25) * (settings.skewAmount || 5);
-                    }
-                });
-                previewCanvas.renderAll();
-                setPreviewAnimationFrame(requestAnimationFrame(animate));
-            };
-
-            // Отменяем предыдущую анимацию при обновлении
-            if (previewAnimationFrame) {
-                cancelAnimationFrame(previewAnimationFrame);
-            }
-
+            // Запускаем анимацию если нужно
             if (brush.animated && showBrushMenu) {
-                animate();
+                const animate = () => {
+                    if (!showBrushMenu || !isAnimated) return;
+                    
+                    const objects = previewCanvas.getObjects();
+                    animateObjects(previewCanvas, objects);
+                    animationId = requestAnimationFrame(animate);
+                };
+                
+                animationId = requestAnimationFrame(animate);
+                setPreviewAnimationFrame(animationId);
             }
         }
 
-        // Очистка при размонтировании или закрытии меню
+        // Очистка при размонтировании или изменении зависимостей
         return () => {
-            if (previewAnimationFrame) {
-                cancelAnimationFrame(previewAnimationFrame);
-                setPreviewAnimationFrame(null);
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+            if (previewCanvas) {
+                previewCanvas.dispose();
             }
         };
-    }, [showBrushMenu, color, brushSize, opacity, textureScale, strokeVariation, pressureVariation, graininess, strokeCount, grainSize, canvas?.freeDrawingBrush?.animated, isAnimated, animationSettings]);
+    }, [showBrushMenu, color, brushSize, opacity, textureScale, strokeVariation, pressureVariation, graininess, strokeCount, grainSize, isAnimated, animationSettings, animateObjects]);
+
+    // Функция для анимации объектов (переиспользуемая)
+    const animateObjects = React.useCallback((canvas, objects) => {
+        objects.forEach(obj => {
+            if (obj.animated) {
+                obj.animationTime = (obj.animationTime || 0) + 0.5;
+                const settings = obj.animationSettings;
+
+                const pulseScale = 1 + Math.sin(obj.animationTime * 0.8) * settings.pulseScale;
+                obj.scaleX = pulseScale;
+                obj.scaleY = pulseScale;
+
+                obj.angle += Math.sin(obj.animationTime * settings.rotationSpeed) * 2;
+
+                obj.opacity = settings.opacityRange > 0 ?
+                    1 + Math.sin(obj.animationTime * 0.4) * settings.opacityRange :
+                    1;
+
+                obj.left += Math.sin(obj.animationTime * 0.3) * settings.moveAmplitude;
+                obj.top += Math.cos(obj.animationTime * 0.2) * settings.moveAmplitude;
+
+                obj.skewX = Math.sin(obj.animationTime * 0.25) * (settings.skewAmount || 5);
+                obj.skewY = Math.cos(obj.animationTime * 0.25) * (settings.skewAmount || 5);
+            }
+        });
+        canvas.renderAll();
+    }, []);
+
+    
+
 
     // Обработчик кликов и сенсорных событий по всему документу
     React.useEffect(() => {
@@ -311,7 +329,7 @@ const Toolbar = ({
             // Проверяем, если клик был вне меню кисточки И не на кнопке кисточки, скрываем меню
             const brushButton = event.target.closest('button i.fa-paint-brush')?.parentElement;
             const isClickOnBrushButton = brushButton && (brushButton.contains(event.target) || event.target === brushButton);
-            
+
             if (brushMenuRef.current && !brushMenuRef.current.contains(event.target) && !isClickOnBrushButton) {
                 setShowBrushMenu(false);
             }
@@ -332,7 +350,7 @@ const Toolbar = ({
         // Добавляем слушатели событий для мыши и сенсорных экранов
         document.addEventListener('mousedown', handleClickOutside);
         document.addEventListener('touchstart', handleClickOutside);
-        
+
         // Добавляем слушатели для изменения viewport на мобильных
         if (isMobile) {
             window.addEventListener('orientationchange', handleViewportChange);
@@ -343,79 +361,13 @@ const Toolbar = ({
             // Удаляем слушатели событий при размонтировании компонента
             document.removeEventListener('mousedown', handleClickOutside);
             document.removeEventListener('touchstart', handleClickOutside);
-            
+
             if (isMobile) {
                 window.removeEventListener('orientationchange', handleViewportChange);
                 window.removeEventListener('resize', handleViewportChange);
             }
         };
     }, [isMobile, showBrushMenu]);
-
-    React.useEffect(() => {
-        console.log('Updating brush preview');
-        if (brushPreviewRef.current) {
-            const previewCanvas = new fabric.Canvas(brushPreviewRef.current);
-            previewCanvas.setDimensions({ width: 200, height: 200 });
-            previewCanvas.backgroundColor = 'transparent';
-
-            const brush = new fabric.CrayonBrush(previewCanvas);
-            brush.color = color;
-            brush.width = brushSize;
-            brush.opacity = opacity;
-            brush.textureScale = textureScale;
-            brush.strokeVariation = strokeVariation;
-            brush.pressureVariation = pressureVariation;
-            brush.graininess = graininess;
-            brush.strokeCount = strokeCount;
-            brush.grainSize = grainSize;
-
-            // Применяем текущие настройки анимации из состояния
-            brush.animated = isAnimated;
-            brush.animationSettings = animationSettings;
-
-            previewCanvas.clear();
-            previewCanvas.backgroundColor = 'transparent';
-
-            const startPoint = { x: 60, y: 100 };
-            const endPoint = { x: 140, y: 100 };
-
-            brush.onMouseDown(startPoint);
-            brush.onMouseMove(endPoint);
-            brush.onMouseUp();
-
-            // Если анимация включена, запускаем анимацию для превью
-            if (brush.animated) {
-                const animate = () => {
-                    const objects = previewCanvas.getObjects();
-                    objects.forEach(obj => {
-                        if (obj.animated) {
-                            obj.animationTime = (obj.animationTime || 0) + 0.5;
-                            const settings = obj.animationSettings;
-
-                            const pulseScale = 1 + Math.sin(obj.animationTime * 0.8) * settings.pulseScale;
-                            obj.scaleX = pulseScale;
-                            obj.scaleY = pulseScale;
-
-                            obj.angle += Math.sin(obj.animationTime * settings.rotationSpeed) * 2;
-
-                            obj.opacity = settings.opacityRange > 0 ? 
-                                1 + Math.sin(obj.animationTime * 0.4) * settings.opacityRange :
-                                1;
-
-                            obj.left += Math.sin(obj.animationTime * 0.3) * settings.moveAmplitude;
-                            obj.top += Math.cos(obj.animationTime * 0.2) * settings.moveAmplitude;
-
-                            obj.skewX = Math.sin(obj.animationTime * 0.25) * (settings.skewAmount || 5);
-                            obj.skewY = Math.cos(obj.animationTime * 0.25) * (settings.skewAmount || 5);
-                        }
-                    });
-                    previewCanvas.renderAll();
-                    requestAnimationFrame(animate);
-                };
-                requestAnimationFrame(animate);
-            }
-        }
-    }, [color, brushSize, opacity, textureScale, strokeVariation, pressureVariation, graininess, strokeCount, grainSize, canvas, isAnimated, animationSettings]);
 
     // Применяем настройки анимации к кисти при их изменении
     React.useEffect(() => {
@@ -424,6 +376,16 @@ const Toolbar = ({
             canvas.freeDrawingBrush.animationSettings = animationSettings;
         }
     }, [canvas, isAnimated, animationSettings]);
+
+    // Очистка анимации превью при размонтировании компонента
+    React.useEffect(() => {
+        return () => {
+            if (previewAnimationFrame) {
+                cancelAnimationFrame(previewAnimationFrame);
+                setPreviewAnimationFrame(null);
+            }
+        };
+    }, []);
 
     const handleMouseEnter = () => {
         if (timeoutRef.current) {
@@ -457,7 +419,7 @@ const Toolbar = ({
                     </button>
                     <button onClick={(event) => {
                         event.stopPropagation();
-                        console.log('Brush mode'); 
+                        console.log('Brush mode');
                         triggerHaptic('selection');
                         if (mode !== 'brush') {
                             setMode('brush');
@@ -497,9 +459,9 @@ const Toolbar = ({
             canvas.renderAll();
         }
     }}>
-        <i className="fas fa-search-plus"></i>
-    </button>
-    <button onClick={() => {
+                        <i className="fas fa-search-plus"></i>
+                    </button>
+                    <button onClick={() => {
         if (canvas) {
             const center = { x: canvas.width / 2, y: canvas.height / 2 };
             const currentZoom = canvas.getZoom();
@@ -508,24 +470,24 @@ const Toolbar = ({
             canvas.renderAll();
         }
     }}>
-        <i className="fas fa-search-minus"></i>
-    </button>
-                    <button 
-                        onClick={() => {triggerHaptic('selection'); toggleLayersPanel();}} 
+                        <i className="fas fa-search-minus"></i>
+                    </button>
+                    <button
+                        onClick={() => {triggerHaptic('selection'); toggleLayersPanel();}}
                         className={isLayersPanelVisible ? 'active' : ''}
                         title="layers (F2)"
                     >
                         <i className="fas fa-layer-group"></i>
                     </button>
-                    <button 
+                    <button
                         onClick={() => {triggerHaptic('selection'); toggleTheme();}}
                         title={isDarkTheme ? "go light side" : "go dark side"}
                     >
                         <i className={isDarkTheme ? "fas fa-sun" : "fas fa-moon"}></i>
                     </button>
-                    <button 
+                    <button
                         onClick={() => {
-                            console.log('Opening render area selector'); 
+                            console.log('Opening render area selector');
                             triggerHaptic('impact', 'light');
                             showGifAreaSelector();
                         }}
@@ -536,7 +498,7 @@ const Toolbar = ({
 
                         {/* Кнопка Share - только в Farcaster */}
                         {isFarcasterApp && farcasterSDK && (
-                            <button 
+                            <button
                                 onClick={async () => {
                                     try {
                                         console.log('📤 Sharing creation...');
@@ -550,7 +512,7 @@ const Toolbar = ({
                                     }
                                 }}
                                 title="Share your creation"
-                                style={{ 
+                                style={{
                                     background: 'linear-gradient(45deg, #ff6b35, #f7931e)',
                                     color: 'white'
                                 }}
@@ -561,21 +523,21 @@ const Toolbar = ({
 
                         {/* Кнопка добавления в избранное - показывается только если НЕ добавлено */}
                         {isFarcasterApp && farcasterSDK && !isInFavorites && (
-                            <button 
+                            <button
                                 onClick={async () => {
                                     try {
                                         console.log('⭐ Adding to favorites...');
                                         await farcasterSDK.actions.addMiniApp();
                                         console.log('✅ Successfully added to favorites!');
-                                        
+
                                         // Скрываем кнопку после успешного добавления
                                         setIsInFavorites(true);
-                                        
+
                                         // Опционально: показать уведомление
                                         // alert('✅ alfatapes added to your favorites!');
                                     } catch (error) {
                                         console.error('❌ Failed to add to favorites:', error);
-                                        
+
                                         if (error.message?.includes('RejectedByUser')) {
                                             console.log('ℹ️ User cancelled adding to favorites');
                                         } else if (error.message?.includes('InvalidDomainManifestJson')) {
@@ -586,7 +548,7 @@ const Toolbar = ({
                                     }
                                 }}
                                 title="Add to favorites"
-                                style={{ 
+                                style={{
                                     background: 'linear-gradient(45deg, #ffd700, #ffed4a)',
                                     color: '#333'
                                 }}
@@ -594,10 +556,10 @@ const Toolbar = ({
                                 <i className="fas fa-star"></i>
                             </button>
                         )}
-                    
+
                 </div>
             </div>
-            
+
             {/* Brush menu rendered separately outside toolbar */}
             {showBrushMenu && (
                 <div className="brush-menu" ref={brushMenuRef} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
