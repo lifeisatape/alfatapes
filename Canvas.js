@@ -37,67 +37,121 @@ const Canvas = ({ setCanvas, mode, setMode, color, brushSize, opacity, textureSc
         }
     }, [isFarcasterApp, farcasterSDK]);
 
-    const animate = () => {
+    const animationIdRef = React.useRef(null);
+    
+    const animate = React.useCallback(() => {
         if (fabricCanvasRef.current) {
-      
+            // Получаем активные объекты (выбранные пользователем)
+            const activeObject = fabricCanvasRef.current.getActiveObject();
+            const activeObjects = new Set();
+            
+            if (activeObject) {
+                if (activeObject.type === 'activeSelection') {
+                    // Множественный выбор - добавляем все объекты из группы
+                    activeObject.getObjects().forEach(obj => activeObjects.add(obj));
+                } else {
+                    // Одиночный выбор
+                    activeObjects.add(activeObject);
+                }
+            }
+            
             const animateObjects = (objects) => {
                 objects.forEach(obj => {
                     if (obj.type === 'group' && obj.getObjects) {
-                       
                         animateObjects(obj.getObjects());
-                    } else if (obj.animated) {
+                    } else if (obj.animated && !activeObjects.has(obj)) {
+                        // Пропускаем анимацию для активных объектов
+                        
+                        // Инициализируем настройки анимации если их нет
+                        if (!obj.animationSettings) {
+                            obj.animationSettings = {
+                                pulseScale: 0.15,
+                                rotationSpeed: 0,
+                                opacityRange: 0,
+                                moveAmplitude: 0.2,
+                                skewAmount: 2
+                            };
+                        }
                    
                         obj.animationTime = (obj.animationTime || 0) + 0.5;
-                        const settings = obj.animationSettings || {
-                            pulseScale: 0.15,
-                            rotationSpeed: 0.3,
-                            opacityRange: 0.4,
-                            moveAmplitude: 0.8,
-                            skewAmount: 5
-                        };
+                        const settings = obj.animationSettings;
 
-                        if (!obj.baseScaleX) obj.baseScaleX = obj.scaleX;
-                        if (!obj.baseScaleY) obj.baseScaleY = obj.scaleY;
-
-                        const pulseScale = 1 + Math.sin(obj.animationTime * 0.8) * settings.pulseScale;
-                        if (obj.scaleX !== obj.baseScaleX * pulseScale) {
-                            obj.baseScaleX = obj.scaleX / pulseScale;
+                        // Инициализируем базовые значения только один раз
+                        if (typeof obj.baseScaleX === 'undefined') {
+                            obj.baseScaleX = obj.scaleX || 1;
                         }
-                        if (obj.scaleY !== obj.baseScaleY * pulseScale) {
-                            obj.baseScaleY = obj.scaleY / pulseScale;
+                        if (typeof obj.baseScaleY === 'undefined') {
+                            obj.baseScaleY = obj.scaleY || 1;
                         }
-                        obj.scaleX = obj.baseScaleX * pulseScale;
-                        obj.scaleY = obj.baseScaleY * pulseScale;
 
-                        obj.angle += Math.sin(obj.animationTime * settings.rotationSpeed) * 2;
-                        obj.opacity = settings.opacityRange > 0 ? 
-                            1 + Math.sin(obj.animationTime * 0.4) * settings.opacityRange :
-                            1;
+                        // Применяем пульсацию к базовым значениям
+                        if (settings.pulseScale > 0) {
+                            const pulseScale = 1 + Math.sin(obj.animationTime * 0.8) * settings.pulseScale;
+                            obj.set({
+                                scaleX: obj.baseScaleX * pulseScale,
+                                scaleY: obj.baseScaleY * pulseScale
+                            });
+                        }
 
-                        obj.left += Math.sin(obj.animationTime * 0.3) * settings.moveAmplitude;
-                        obj.top += Math.cos(obj.animationTime * 0.2) * settings.moveAmplitude;
+                        if (settings.rotationSpeed > 0) {
+                            obj.set({
+                                angle: obj.angle + Math.sin(obj.animationTime * settings.rotationSpeed) * 2
+                            });
+                        }
 
-                        obj.skewX = Math.sin(obj.animationTime * 0.25) * settings.skewAmount;
-                        obj.skewY = Math.cos(obj.animationTime * 0.25) * settings.skewAmount;
+                        if (settings.opacityRange > 0) {
+                            obj.set({
+                                opacity: Math.max(0.1, 1 + Math.sin(obj.animationTime * 0.4) * settings.opacityRange)
+                            });
+                        }
+
+                        if (settings.moveAmplitude > 0) {
+                            if (!obj.originalLeft) obj.originalLeft = obj.left;
+                            if (!obj.originalTop) obj.originalTop = obj.top;
+                            
+                            obj.set({
+                                left: obj.originalLeft + Math.sin(obj.animationTime * 0.3) * settings.moveAmplitude,
+                                top: obj.originalTop + Math.cos(obj.animationTime * 0.2) * settings.moveAmplitude
+                            });
+                        }
+
+                        if (settings.skewAmount > 0) {
+                            obj.set({
+                                skewX: Math.sin(obj.animationTime * 0.25) * settings.skewAmount,
+                                skewY: Math.cos(obj.animationTime * 0.25) * settings.skewAmount
+                            });
+                        }
+                        
+                        obj.setCoords();
                     }
                 });
             };
 
-            animateObjects(fabricCanvasRef.current.getObjects());
+            const objects = fabricCanvasRef.current.getObjects();
+            animateObjects(objects);
+            
             fabricCanvasRef.current.renderAll();
-            requestAnimationFrame(animate);
+            animationIdRef.current = requestAnimationFrame(animate);
         }
-    };
+    }, []);
 
     React.useEffect(() => {
         currentMode.current = mode;
     }, [mode]);
 
+    // Cleanup animation on unmount
+    React.useEffect(() => {
+        return () => {
+            if (animationIdRef.current) {
+                cancelAnimationFrame(animationIdRef.current);
+                animationIdRef.current = null;
+            }
+        };
+    }, []);
+
     React.useEffect(() => {
         console.log('Initializing canvas');
         if (!fabricCanvasRef.current) {
-            requestAnimationFrame(animate);
-
             isTouch.current = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
             console.log('Is touch device:', isTouch.current);
 
@@ -259,6 +313,13 @@ const Canvas = ({ setCanvas, mode, setMode, color, brushSize, opacity, textureSc
 
             const handleKeyDown = (e) => {
                 if (!canvas) return;
+
+                // Проверяем, редактируется ли текст
+                const activeObj = canvas.getActiveObject();
+                if (activeObj && activeObj.type === 'i-text' && activeObj.isEditing) {
+                    // Не обрабатываем горячие клавиши, когда пользователь вводит текст
+                    return;
+                }
 
                 if (e.code === 'Space' && !e.repeat && !isSpacePressed.current) {
                     e.preventDefault();
@@ -552,6 +613,48 @@ const Canvas = ({ setCanvas, mode, setMode, color, brushSize, opacity, textureSc
             canvas.on('mouse:move', handleMouseMove);
             canvas.on('mouse:up', handleMouseUp);
             canvas.on('after:render', updateZoomLevel);
+            
+            // Обновление базовых значений после манипуляции объектом
+            canvas.on('object:modified', (e) => {
+                const obj = e.target;
+                
+                // Одиночный объект
+                if (obj && obj.animated && obj.type !== 'activeSelection') {
+                    obj.baseScaleX = obj.scaleX || 1;
+                    obj.baseScaleY = obj.scaleY || 1;
+                    obj.originalLeft = obj.left;
+                    obj.originalTop = obj.top;
+                }
+                // Группа объектов - обновляем каждый объект внутри
+                else if (obj && obj.type === 'activeSelection') {
+                    obj.forEachObject((item) => {
+                        if (item.animated) {
+                            item.baseScaleX = item.scaleX || 1;
+                            item.baseScaleY = item.scaleY || 1;
+                        }
+                    });
+                }
+            });
+            
+            // После снятия выделения обновляем координаты
+            canvas.on('selection:cleared', (e) => {
+                // Обновляем координаты для всех анимированных объектов
+                canvas.getObjects().forEach(obj => {
+                    if (obj.animated) {
+                        obj.originalLeft = obj.left;
+                        obj.originalTop = obj.top;
+                        
+                        // Сбрасываем анимационные эффекты
+                        if (obj.animationSettings && obj.animationSettings.skewAmount > 0) {
+                            obj.skewX = 0;
+                            obj.skewY = 0;
+                        }
+                        obj.setCoords();
+                    }
+                });
+                canvas.requestRenderAll();
+            });
+            
             document.addEventListener('keydown', handleKeyDown);
             document.addEventListener('keyup', handleKeyUp);
 
@@ -593,6 +696,9 @@ const Canvas = ({ setCanvas, mode, setMode, color, brushSize, opacity, textureSc
                 }, 100);
             }
 
+            // Start animation loop AFTER canvas is fully initialized
+            animationIdRef.current = requestAnimationFrame(animate);
+
             return () => {
                 console.log('Disposing canvas');
 
@@ -604,6 +710,8 @@ const Canvas = ({ setCanvas, mode, setMode, color, brushSize, opacity, textureSc
                 canvas.off('mouse:move', handleMouseMove);
                 canvas.off('mouse:up', handleMouseUp);
                 canvas.off('after:render', updateZoomLevel);
+                canvas.off('object:modified');
+                canvas.off('selection:cleared');
                 document.removeEventListener('keydown', handleKeyDown);
                 document.removeEventListener('keyup', handleKeyUp);
 
@@ -624,6 +732,11 @@ const Canvas = ({ setCanvas, mode, setMode, color, brushSize, opacity, textureSc
 
                 canvas.dispose();
             };
+        } else {
+            // Canvas already exists, ensure animation is running
+            if (!animationIdRef.current) {
+                animationIdRef.current = requestAnimationFrame(animate);
+            }
         }
     }, [setCanvas]);
 
@@ -642,14 +755,20 @@ const Canvas = ({ setCanvas, mode, setMode, color, brushSize, opacity, textureSc
 
         canvas.add(text);
         canvas.setActiveObject(text);
-
+        
+        // Переключаемся на режим выделения сразу после создания текста
+        console.log('Switching mode to select, setMode exists:', !!setMode);
         if (setMode) {
             setMode('select');
-            setTimeout(() => {
-                text.enterEditing();
-                canvas.renderAll();
-            }, 100);
+            console.log('Mode switched to select');
         }
+        
+        // Входим в режим редактирования текста
+        setTimeout(() => {
+            text.enterEditing();
+            text.selectAll();
+            canvas.renderAll();
+        }, 50);
     };
 
     const addText = (e) => {
@@ -689,7 +808,7 @@ const Canvas = ({ setCanvas, mode, setMode, color, brushSize, opacity, textureSc
                 brush.grainSize = grainSize;
                 brush.animated = true;
                 brush.animationSettings = {
-                    pulseScale: 0,
+                    pulseScale: 0.15,
                     rotationSpeed: 0,
                     moveAmplitude: 0.2,
                     opacityRange: 0,
@@ -810,24 +929,53 @@ const Canvas = ({ setCanvas, mode, setMode, color, brushSize, opacity, textureSc
 
             activeObject.clone((clonedObj) => {
                 if (clonedObj.type === 'activeSelection') {
-                    clonedObj.canvas = fabricCanvasRef.current;
-                    clonedObj.forEachObject((obj, index) => {
-                        const originalObj = activeObject.getObjects()[index];
-                        if (originalObj && originalObj.animated) {
-                            obj.animated = true;
-                            obj.animationSettings = originalObj.animationSettings ? 
-                                {...originalObj.animationSettings} : {
-                                    pulseScale: 0.15,
-                                    rotationSpeed: 0.3,
-                                    opacityRange: 0.4,
-                                    moveAmplitude: 0.8,
-                                    skewAmount: 5
-                                };
-                            obj.animationTime = Math.random() * 100;
-                            obj.originalLeft = obj.left + 10;
-                            obj.originalTop = obj.top + 10;
-                        }
-                        fabricCanvasRef.current.add(obj);
+                    // Для группы объектов клонируем каждый объект отдельно с правильными координатами
+                    const clonedObjects = [];
+                    
+                    activeObject.forEachObject((originalObj) => {
+                        originalObj.clone((clonedItem) => {
+                            // Получаем абсолютные координаты оригинального объекта на холсте
+                            const absoluteLeft = originalObj.left + activeObject.left + activeObject.width / 2;
+                            const absoluteTop = originalObj.top + activeObject.top + activeObject.height / 2;
+                            
+                            // Устанавливаем абсолютные координаты + смещение для копии
+                            clonedItem.set({
+                                left: absoluteLeft + 10,
+                                top: absoluteTop + 10
+                            });
+                            
+                            if (originalObj.animated) {
+                                clonedItem.animated = true;
+                                clonedItem.animationSettings = originalObj.animationSettings ? 
+                                    {...originalObj.animationSettings} : {
+                                        pulseScale: 0.15,
+                                        rotationSpeed: 0.3,
+                                        opacityRange: 0.4,
+                                        moveAmplitude: 0.8,
+                                        skewAmount: 5
+                                    };
+                                clonedItem.animationTime = Math.random() * 100;
+                                
+                                // Инициализируем базовые значения для анимации
+                                clonedItem.baseScaleX = clonedItem.scaleX || 1;
+                                clonedItem.baseScaleY = clonedItem.scaleY || 1;
+                                clonedItem.originalLeft = clonedItem.left;
+                                clonedItem.originalTop = clonedItem.top;
+                            }
+                            
+                            clonedItem.setCoords();
+                            fabricCanvasRef.current.add(clonedItem);
+                            clonedObjects.push(clonedItem);
+                            
+                            // После добавления всех объектов выбираем их
+                            if (clonedObjects.length === activeObject.size()) {
+                                const selection = new fabric.ActiveSelection(clonedObjects, {
+                                    canvas: fabricCanvasRef.current
+                                });
+                                fabricCanvasRef.current.setActiveObject(selection);
+                                fabricCanvasRef.current.requestRenderAll();
+                            }
+                        });
                     });
                 } else {
                     fabricCanvasRef.current.add(clonedObj);
@@ -836,20 +984,24 @@ const Canvas = ({ setCanvas, mode, setMode, color, brushSize, opacity, textureSc
                         clonedObj.animated = true;
                         clonedObj.animationSettings = JSON.parse(JSON.stringify(activeObject.animationSettings));
                         clonedObj.animationTime = Math.random() * 100;
+                        
+                        // Инициализируем базовые значения для анимации
+                        clonedObj.baseScaleX = clonedObj.scaleX || 1;
+                        clonedObj.baseScaleY = clonedObj.scaleY || 1;
                         clonedObj.originalLeft = newLeft;
                         clonedObj.originalTop = newTop;
                     }
+                    
+                    clonedObj.set({
+                        left: newLeft,
+                        top: newTop,
+                        evented: true
+                    });
+
+                    clonedObj.setCoords();
+                    fabricCanvasRef.current.setActiveObject(clonedObj);
+                    fabricCanvasRef.current.requestRenderAll();
                 }
-
-                clonedObj.set({
-                    left: newLeft,
-                    top: newTop,
-                    evented: true
-                });
-
-                clonedObj.setCoords();
-                fabricCanvasRef.current.setActiveObject(clonedObj);
-                fabricCanvasRef.current.requestRenderAll();
             });
         }
         handleCloseContextMenu();
