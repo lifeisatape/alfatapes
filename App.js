@@ -10,7 +10,7 @@ const App = () => {
         params: Object.fromEntries(new URLSearchParams(window.location.search))
     });
     const [canvas, setCanvas] = React.useState(null);
-    const [mode, setMode] = React.useState('select');
+    const [mode, setMode] = React.useState('brush');
     const [color, setColor] = React.useState('#7B65C1');
     const [brushSize, setBrushSize] = React.useState(10);
     const [opacity, setOpacity] = React.useState(0.8);
